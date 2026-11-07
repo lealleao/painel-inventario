@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel de Inventário — CD</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+:root{
+  --bg:#f3f4f6; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --mut:#8a8984; --line:#e3e2de; --grid:#eeede9;
+  --pri:#12263a; --acc:#2a78d6;
+  --st-pend:#c9c8c2; --st-cont:#2a78d6; --st-rec:#6250d6; --st-ok:#0ca30c; --st-enviando:#9fc3ef;
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;border:0;border-radius:8px;padding:8px 14px;background:var(--acc);color:#fff;font-weight:600;cursor:pointer}
+button.sec{background:#e7e6e1;color:var(--ink)} button.err{background:var(--crit)} button.ok{background:#1a7f37}
+button.link{background:none;color:var(--acc);padding:4px 6px}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid #2a78d655;border-color:var(--acc)}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink2);font-weight:600}
+label.chk{flex-direction:row;align-items:center;gap:8px;font-weight:500;color:var(--ink)}
+.topo{background:var(--pri);color:#fff;display:flex;align-items:center;gap:14px;padding:10px 20px;position:sticky;top:0;z-index:20}
+.topo .marca{font-weight:800;font-size:16px;white-space:nowrap}
+.topo select{background:#ffffff18;color:#fff;border-color:#ffffff30;max-width:320px}
+.topo select option{color:#000}
+.topo .esp{flex:1}
+.topo .viva{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.85}
+.pulso{width:8px;height:8px;border-radius:50%;background:#3fd27a;box-shadow:0 0 0 0 #3fd27a99;animation:pul 2s infinite}
+.pulso.off{background:#ff6b6b;animation:none}
+@keyframes pul{70%{box-shadow:0 0 0 8px #3fd27a00}100%{box-shadow:0 0 0 0 #3fd27a00}}
+.topo button{background:#ffffff1c;padding:6px 12px}
+nav.abas{display:flex;gap:2px;padding:0 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:52px;z-index:19;overflow-x:auto}
+nav.abas button{background:none;color:var(--ink2);border-radius:0;padding:12px 14px;border-bottom:3px solid transparent;white-space:nowrap}
+nav.abas button.on{color:var(--ink);border-bottom-color:var(--acc)}
+.pagina{display:none;padding:20px;max-width:1500px;margin:0 auto;flex-direction:column;gap:16px}
+.pagina.on{display:flex}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h3{margin:0 0 12px;font-size:15px}
+.card h3 small{font-weight:500;color:var(--mut);margin-left:6px}
+.grade{display:grid;gap:16px}
+.g2{grid-template-columns:2fr 1fr}.g2b{grid-template-columns:1fr 1fr}
+@media(max-width:1000px){.g2,.g2b{grid-template-columns:1fr}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi .r{font-size:12px;color:var(--ink2);font-weight:600}
+.kpi .v{font-size:28px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:12px;color:var(--mut)}
+.kpi.hero{grid-column:span 2;display:flex;gap:18px;align-items:center}
+.kpi.hero .v{font-size:44px}
+.prog{height:10px;background:var(--grid);border-radius:6px;overflow:hidden;display:flex;gap:2px}
+.prog i{display:block;height:100%}
+.leg{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink2);margin-bottom:10px}
+.leg span{display:flex;align-items:center;gap:6px}
+.leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.ruas{display:flex;flex-direction:column;gap:8px;max-height:460px;overflow:auto}
+.rua{display:grid;grid-template-columns:70px 1fr 90px;gap:10px;align-items:center;font-size:13px}
+.rua .n{font-weight:700}
+.rua .c{text-align:right;color:var(--ink2);font-variant-numeric:tabular-nums}
+.barra{display:flex;height:16px;gap:2px}
+.barra i{display:block;height:100%}
+.barra i:first-child{border-radius:4px 0 0 4px}.barra i:last-child{border-radius:0 4px 4px 0}
+.barra i:only-child{border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:12px;color:var(--ink2);font-weight:600;padding:8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);white-space:nowrap;cursor:default}
+th.ord{cursor:pointer}
+td{padding:7px 8px;border-bottom:1px solid var(--grid);vertical-align:middle}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.click{cursor:pointer} tr.click:hover td{background:#f4f7fc}
+.tab-wrap{max-height:620px;overflow:auto}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:20px;background:#efeee9;color:var(--ink);white-space:nowrap}
+.tag i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.feed{display:flex;flex-direction:column;max-height:460px;overflow:auto}
+.feed .ev{display:grid;grid-template-columns:52px 1fr auto;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid);align-items:center}
+.feed .ev .h{color:var(--mut);font-variant-numeric:tabular-nums;font-size:12px}
+.feed .ev b{font-weight:700}
+.feed .ev.novo{animation:entra 1.5s}
+@keyframes entra{from{background:#e8f1fd}to{background:transparent}}
+.filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.mapa{display:flex;flex-direction:column;gap:14px}
+.mapa .linha{display:flex;gap:10px}
+.mapa .linha .n{width:60px;font-weight:700;padding-top:4px}
+.mapa .cel{display:flex;flex-wrap:wrap;gap:3px;flex:1}
+.mapa .e{min-width:70px;padding:4px 6px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:2px solid transparent;color:#0b0b0b}
+.mapa .e:hover{border-color:#0b0b0b}
+.mapa .e.s-pendente{background:#ecebe6;color:#52514e}
+.mapa .e.s-em_contagem{background:#2a78d6;color:#fff}
+.mapa .e.s-recontagem{background:#6250d6;color:#fff}
+.mapa .e.s-concluido{background:#d6f0d6;color:#0b4d0b}
+.mapa .e.div{box-shadow:inset 0 -3px 0 var(--crit)}
+.gaveta{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:#fff;box-shadow:-10px 0 30px #0002;z-index:40;transform:translateX(105%);transition:transform .2s;display:flex;flex-direction:column}
+.gaveta.on{transform:none}
+.gaveta .cab{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+.gaveta .corpo{padding:16px 20px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:14px}
+.modal{position:fixed;inset:0;background:#0006;z-index:50;display:none;align-items:center;justify-content:center}
+.modal.on{display:flex}
+.modal .box{background:#fff;border-radius:14px;padding:20px;width:min(720px,94vw);max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.modal h3{margin:0}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.acoes{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0b0b0b;color:#fff;padding:10px 18px;border-radius:10px;z-index:99;opacity:0;transition:.2s;pointer-events:none}
+#toast.on{opacity:1}#toast.err{background:var(--crit)}#toast.ok{background:#1a7f37}
+.login{max-width:420px;margin:8vh auto;display:flex;flex-direction:column;gap:12px}
+.login h1{margin:0;color:var(--pri)}
+.mut{color:var(--mut)} .ink2{color:var(--ink2)}
+.vazio{padding:30px;text-align:center;color:var(--mut)}
+.horas{display:flex;align-items:flex-end;gap:4px;height:150px;padding-top:10px;border-bottom:1px solid var(--line)}
+.horas .b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;position:relative}
+.horas .b i{display:block;width:70%;max-width:34px;background:var(--acc);border-radius:4px 4px 0 0;min-height:0}
+.horas .b span{position:absolute;bottom:-20px;font-size:11px;color:var(--mut)}
+.horas .b em{font-style:normal;font-size:11px;color:var(--ink2);margin-bottom:2px}
+.qr{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.qr .codigo{background:#fff;padding:10px;border:1px solid var(--line);border-radius:12px}
+code{background:#efeee9;padding:2px 6px;border-radius:5px;font-size:12px}
+.passos li{margin-bottom:6px}
+.dica{background:#eef4fc;border:1px solid #cfe0f7;border-radius:10px;padding:10px 14px;font-size:13px;color:#1d4f8f}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="v-login" style="display:none">
+  <div class="login card">
+    <h1>Painel de Inventário</h1>
+    <div class="ink2">Acompanhe a contagem do CD em tempo real.</div>
+    <label>URL do projeto Supabase<input id="l-url" placeholder="https://xxxx.supabase.co"></label>
+    <label>Chave pública (anon / publishable)<input id="l-key" placeholder="eyJ... ou sb_publishable_..."></label>
+    <label>E-mail do administrador<input id="l-email" type="email"></label>
+    <label>Senha<input id="l-senha" type="password"></label>
+    <button id="l-entrar">Entrar</button>
+    <div class="mut" style="font-size:12px">URL e chave ficam em Supabase → Project Settings → API. O e-mail precisa estar cadastrado em Authentication → Users e na tabela <code>admins</code>.</div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="v-app" style="display:none">
+  <div class="topo">
+    <div class="marca">📦 Inventário CD</div>
+    <select id="sel-inv"></select>
+    <div class="esp"></div>
+    <div class="viva"><span class="pulso" id="pulso"></span><span id="atualizado">—</span></div>
+    <button id="b-sair">Sair</button>
+  </div>
+  <nav class="abas">
+    <button data-p="acomp" class="on">Acompanhamento</button>
+    <button data-p="mapa">Endereços</button>
+    <button data-p="confronto">Confronto</button>
+    <button data-p="sku">Por SKU</button>
+    <button data-p="ops">Operadores</button>
+    <button data-p="invs">Inventários</button>
+    <button data-p="app">Configurar app</button>
+  </nav>
+
+  <!-- ACOMPANHAMENTO -->
+  <section class="pagina on" id="p-acomp">
+    <div class="kpis" id="kpis"></div>
+    <div class="grade g2">
+      <div class="card">
+        <h3>Progresso por rua <small id="ruas-sub"></small></h3>
+        <div class="leg" id="leg-status"></div>
+        <div class="ruas" id="ruas"></div>
+      </div>
+      <div class="card">
+        <h3>Ao vivo <small>últimos envios</small></h3>
+        <div class="feed" id="feed"></div>
+      </div>
+    </div>
+    <div class="grade g2b">
+      <div class="card">
+        <h3>Endereços finalizados por hora <small>últimas 12 horas</small></h3>
+        <div class="horas" id="horas"></div><div style="height:22px"></div>
+      </div>
+      <div class="card">
+        <h3>Contando agora</h3>
+        <div id="agora"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAPA -->
+  <section class="pagina" id="p-mapa">
+    <div class="card">
+      <div class="filtros">
+        <label>Buscar<input id="m-busca" placeholder="Endereço"></label>
+        <label>Status<select id="m-status">
+          <option value="">Todos</option><option value="pendente">A contar</option><option value="em_contagem">Em contagem</option>
+          <option value="recontagem">Recontagem</option><option value="concluido">Concluído</option><option value="div">Concluído com divergência</option>
+          <option value="fora">Fora da base</option></select></label>
+        <label>Rua<select id="m-rua"><option value="">Todas</option></select></label>
+        <div style="flex:1"></div>
+        <label>Ação nos filtrados<select id="m-acao"><option value="">—</option><option value="recontar">Mandar recontar</option>
+          <option value="concluir">Marcar concluído</option><option value="liberar">Liberar (destravar em contagem)</option><option value="zerar">Zerar contagens</option></select></label>
+        <button id="m-aplicar" class="sec">Aplicar</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="leg" id="leg-mapa"></div>
+      <div class="mapa" id="mapa"></div>
+    </div>
+  </section>
+
+  <!-- CONFRONTO -->
+  <section class="pagina" id="p-confronto">
+    <div class="card">
+      <div class="filtros">
+        <label>Buscar<input id="c-busca" placeholder="Endereço, SKU ou descrição"></label>
+        <label>Situação<select id="c-sit">
+          <option value="div">Divergentes (falta + sobra)</option><option value="">Todos</option><option value="falta">Falta</option>
+          <option value="sobra">Sobra</option><option value="ok">OK</option><option value="nao_contado">Não contado</option><option value="naocad">Código não cadastrado</option></select></label>
+        <label>Rua<select id="c-rua"><option value="">Todas</option></select></label>
+        <div style="flex:1"></div>
+        <button id="c-atualizar" class="sec">Atualizar</button>
+        <button id="c-exportar">Exportar Excel</button>
+      </div>
+    </div>
+    <div class="kpis" id="c-kpis"></div>
+    <div class="card"><div class="tab-wrap" id="c-tab"></div></div>
+  </section>
+
+  <!-- SKU -->
+  <section class="pagina" id="p-sku">
+    <div class="card">
+      <div class="dica">Visão consolidada por produto, somando todos os endereços. Um SKU pode ter falta em um endereço e sobra em outro (produto guardado no lugar errado) e mesmo assim fechar no total — esses aparecem como <b>“Realocar”</b>.</div>
+      <div class="filtros" style="margin-top:12px">
+        <label>Buscar<input id="s-busca" placeholder="SKU ou descrição"></label>
+        <label>Situação<select id="s-sit"><option value="div">Divergentes no total</option><option value="realoc">Realocar (fecha no total)</option><option value="">Todos</option></select></label>
+        <div style="flex:1"></div>
+        <button id="s-exportar">Exportar Excel</button>
+      </div>
+    </div>
+    <div class="card"><div class="tab-wrap" id="s-tab"></div></div>
+  </section>
+
+  <!-- OPERADORES -->
+  <section class="pagina" id="p-ops">
+    <div class="card">
+      <h3>Produtividade neste inventário</h3>
+      <div class="tab-wrap" id="o-prod"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center"><h3 style="flex:1;margin:0">Cadastro de operadores</h3><button id="o-novo">+ Novo operador</button></div>
+      <div class="tab-wrap" id="o-lista" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- INVENTÁRIOS -->
+  <section class="pagina" id="p-invs">
+    <div class="card">
+      <div style="display:flex;align-items:center"><h3 style="flex:1;margin:0">Inventários</h3><button id="i-novo">+ Novo inventário</button></div>
+      <div class="tab-wrap" id="i-lista" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="i-base">
+      <h3>Base do inventário selecionado <small id="i-base-sub"></small></h3>
+      <ol class="passos">
+        <li>Exporte do WMS o saldo por endereço (Endereço, SKU, Descrição, EAN, Quantidade e, se tiver, Custo unitário). <button class="link" id="i-modelo">Baixar planilha modelo</button></li>
+        <li>Importe abaixo (.xlsx ou .csv). O painel reconhece as colunas automaticamente — confira antes de confirmar.</li>
+        <li>Opcional: importe códigos de caixa (DUN-14) com o fator, para o operador bipar a caixa e somar várias unidades.</li>
+      </ol>
+      <div class="filtros">
+        <label>Saldo por endereço<input type="file" id="i-arq" accept=".xlsx,.xls,.csv"></label>
+        <label>Códigos de caixa (Código, SKU, Fator)<input type="file" id="i-arq-cx" accept=".xlsx,.xls,.csv"></label>
+        <label>Endereços vazios a contar (1 coluna)<input type="file" id="i-arq-end" accept=".xlsx,.xls,.csv,.txt"></label>
+        <div style="flex:1"></div>
+        <button class="err" id="i-limpar">Apagar base</button>
+      </div>
+      <div id="i-map" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <section class="pagina" id="p-app">
+    <div class="card">
+      <h3>Conectar o aplicativo dos operadores</h3>
+      <div class="qr">
+        <div class="codigo" id="qr"></div>
+        <div>
+          <ol class="passos">
+            <li>Instale o <b>InventarioCD.apk</b> no celular ou coletor (página de versões do repositório no GitHub).</li>
+            <li>Abra o app e toque em <b>Escanear QR Code do painel</b>.</li>
+            <li>Aponte para este código. Pronto: o app já sabe onde está o banco.</li>
+            <li>Entre com a <b>matrícula e PIN</b> cadastrados na aba Operadores.</li>
+          </ol>
+          <div class="dica">Coletor com leitor embutido (Zebra, Honeywell, Urovo…): deixe o leitor no modo <b>teclado</b> com <b>Enter</b> no final — o app recebe o código direto no campo.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- gaveta do endereço -->
+<div class="gaveta" id="gaveta">
+  <div class="cab"><div style="flex:1"><b id="g-tit" style="font-size:18px"></b><div id="g-sub" class="mut"></div></div><button class="sec" id="g-fechar">Fechar</button></div>
+  <div class="corpo" id="g-corpo"></div>
+</div>
+
+<div class="modal" id="modal"><div class="box" id="modal-box"></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Painel de Inventário — CD
+   Arquivo único: abra no navegador (duplo clique) ou hospede onde quiser.
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 });
+const fmt = n => n == null || n === '' ? '' : nf.format(Number(n));
+const brl = n => n == null ? '' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0;
+const hora = d => d ? new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+const dataHora = d => d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+const minutos = d => Math.max(0, Math.round((Date.now() - new Date(d)) / 60000));
+const LS = { get: (k, d = null) => { try { return JSON.parse(localStorage.getItem('painel.' + k)) ?? d; } catch { return d; } },
+             set: (k, v) => localStorage.setItem('painel.' + k, JSON.stringify(v)), del: k => localStorage.removeItem('painel.' + k) };
+
+const ST = {
+  pendente:    { cor: 'var(--st-pend)', rot: 'A contar' },
+  em_contagem: { cor: 'var(--st-cont)', rot: 'Em contagem' },
+  recontagem:  { cor: 'var(--st-rec)',  rot: 'Recontagem' },
+  concluido:   { cor: 'var(--st-ok)',   rot: 'Concluído' }
+};
+const SIT = {
+  ok:          { cor: 'var(--good)',    rot: '✓ OK' },
+  falta:       { cor: 'var(--crit)',    rot: '▼ Falta' },
+  sobra:       { cor: 'var(--serious)', rot: '▲ Sobra' },
+  nao_contado: { cor: 'var(--st-pend)', rot: '— Não contado' }
+};
+const RES = {
+  ok: ['var(--good)', 'Bateu'], divergencia_confirmada: ['var(--serious)', 'Divergência confirmada'],
+  divergente_recontar: ['var(--st-rec)', 'Divergente → recontar'], concluido_com_divergencia: ['var(--serious)', 'Concluído c/ divergência']
+};
+const tag = (cor, rot) => `<span class="tag"><i style="background:${cor}"></i>${esc(rot)}</span>`;
+
+function toast(m, t = '') { const el = $('#toast'); el.textContent = m; el.className = 'on ' + t; clearTimeout(el._t); el._t = setTimeout(() => el.className = '', t === 'err' ? 5000 : 2500); }
+
+/* =====================================================================
+   API (Supabase REST + Auth)
+   ===================================================================== */
+let cfg = LS.get('cfg');      // {url,key}
+let auth = LS.get('auth');    // {access_token, refresh_token, expires_at, email}
+
+async function renovar() {
+  const r = await fetch(cfg.url + '/auth/v1/token?grant_type=refresh_token', { method: 'POST',
+    headers: { apikey: cfg.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: auth.refresh_token }) });
+  if (!r.ok) throw new Error('Sessão expirada');
+  const j = await r.json();
+  auth = { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: Date.now() / 1000 + j.expires_in, email: auth.email };
+  LS.set('auth', auth);
+}
+async function api(caminho, { method = 'GET', body, prefer, range } = {}, tentou = false) {
+  if (auth && auth.expires_at - 60 < Date.now() / 1000) { try { await renovar(); } catch { sairPainel('Sessão expirada, entre de novo'); throw new Error('Sessão expirada'); } }
+  const h = { apikey: cfg.key, Authorization: 'Bearer ' + auth.access_token, 'Content-Type': 'application/json' };
+  if (prefer) h.Prefer = prefer;
+  if (range) { h.Range = range; h['Range-Unit'] = 'items'; }
+  let r;
+  try { r = await fetch(cfg.url + '/rest/v1/' + caminho, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) }); }
+  catch { setVivo(false); throw new Error('Sem conexão com o Supabase'); }
+  setVivo(true);
+  if (r.status === 401 && !tentou) { try { await renovar(); return api(caminho, { method, body, prefer, range }, true); } catch { sairPainel('Sessão expirada'); throw new Error('Sessão expirada'); } }
+  const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch { j = txt; }
+  if (!r.ok) throw new Error((j && (j.message || j.hint)) || ('Erro ' + r.status));
+  return j;
+}
+async function todos(caminho, pagina = 1000) {   // busca paginada (o Supabase devolve no máx. 1000 linhas por vez)
+  let out = [], de = 0;
+  for (;;) {
+    const parte = await api(caminho, { range: `${de}-${de + pagina - 1}` });
+    out = out.concat(parte);
+    if (parte.length < pagina) return out;
+    de += pagina;
+  }
+}
+const rpc = (fn, args) => api('rpc/' + fn, { method: 'POST', body: args });
+const q = encodeURIComponent;
+
+/* =====================================================================
+   LOGIN
+   ===================================================================== */
+$('#l-url').value = cfg?.url || ''; $('#l-key').value = cfg?.key || ''; $('#l-email').value = auth?.email || LS.get('email', '');
+$('#l-senha').addEventListener('keydown', e => e.key === 'Enter' && $('#l-entrar').click());
+$('#l-entrar').onclick = async () => {
+  let url = $('#l-url').value.trim().replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
+  if (/^[a-z0-9]{20}$/.test(url)) url = 'https://' + url + '.supabase.co';
+  const key = $('#l-key').value.trim(), email = $('#l-email').value.trim(), senha = $('#l-senha').value;
+  if (!url || !key || !email || !senha) return toast('Preencha todos os campos', 'err');
+  cfg = { url, key };
+  $('#l-entrar').disabled = true;
+  try {
+    const r = await fetch(url + '/auth/v1/token?grant_type=password', { method: 'POST',
+      headers: { apikey: key, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: senha }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error_description || j.msg || j.message || 'Falha no login');
+    auth = { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: Date.now() / 1000 + j.expires_in, email };
+    const adm = await api('rpc/is_admin', { method: 'POST', body: {} });
+    if (!adm) throw new Error('Este e-mail não está na tabela admins. Rode no SQL Editor: insert into admins(email) values (\'' + email + '\');');
+    LS.set('cfg', cfg); LS.set('auth', auth); LS.set('email', email);
+    $('#l-senha').value = '';
+    iniciar();
+  } catch (e) { toast(e.message, 'err'); auth = null; }
+  finally { $('#l-entrar').disabled = false; }
+};
+function sairPainel(msg) {
+  auth = null; LS.del('auth'); clearInterval(timer);
+  $('#v-app').style.display = 'none'; $('#v-login').style.display = '';
+  if (msg) toast(msg, 'err');
+}
+$('#b-sair').onclick = () => sairPainel();
+
+/* =====================================================================
+   ESTADO E CICLO DE ATUALIZAÇÃO
+   ===================================================================== */
+let invs = [], invId = LS.get('inv'), ops = new Map();
+let ends = [], envios = [], kpi = null, confronto = null, confrontoEm = 0;
+let ultimoEnvio = null, timer = null, paginaAtual = 'acomp', vivo = true, ultimaAtualizacao = 0;
+const inv = () => invs.find(i => i.id === invId);
+
+function setVivo(v) { vivo = v; $('#pulso').classList.toggle('off', !v); }
+setInterval(() => { if (ultimaAtualizacao) $('#atualizado').textContent = vivo ? `atualizado há ${Math.round((Date.now() - ultimaAtualizacao) / 1000)}s` : 'sem conexão'; }, 1000);
+
+async function iniciar() {
+  $('#v-login').style.display = 'none'; $('#v-app').style.display = '';
+  await carregarInvs();
+  await carregarOps();
+  await atualizar(true);
+  clearInterval(timer); timer = setInterval(() => atualizar(false), 10000);
+  desenharQR();
+}
+async function carregarInvs() {
+  invs = await api('inventarios?select=*&order=criado_em.desc');
+  if (!invs.find(i => i.id === invId)) invId = (invs.find(i => i.status === 'aberto') || invs[0] || {}).id ?? null;
+  LS.set('inv', invId);
+  $('#sel-inv').innerHTML = invs.length ? invs.map(i => `<option value="${i.id}" ${i.id === invId ? 'selected' : ''}>${esc(i.nome)}${i.status === 'encerrado' ? ' (encerrado)' : ''}</option>`).join('')
+    : '<option>Nenhum inventário — crie na aba Inventários</option>';
+  renderInvs();
+}
+async function carregarOps() {
+  const l = await api('operadores?select=id,nome,matricula,ativo,criado_em&order=nome');
+  ops = new Map(l.map(o => [o.id, o]));
+  renderOps();
+}
+$('#sel-inv').onchange = async () => {
+  invId = +$('#sel-inv').value; LS.set('inv', invId);
+  ends = []; envios = []; kpi = null; confronto = null; ultimoEnvio = null;
+  renderInvs(); await atualizar(true);
+};
+
+async function atualizar(completo) {
+  if (!invId) { renderTudo(); return; }
+  try {
+    const [e, k] = await Promise.all([
+      todos(`enderecos?select=endereco,rua,na_base,status,rodada_atual,operador_atual,iniciado_em,atualizado_em&inventario_id=eq.${invId}&order=endereco`),
+      api(`v_kpi?inventario_id=eq.${invId}`)
+    ]);
+    ends = e; kpi = k[0] || null;
+    // envios: completo a cada 2 min, incremental no resto
+    if (completo || !ultimoEnvio || Date.now() - (atualizar._full || 0) > 120000) {
+      envios = await todos(`envios?select=id,endereco,rodada,operador_id,contado_em,recebido_em,ativo,qtd_itens,total_unidades,resultado&inventario_id=eq.${invId}&order=recebido_em.asc`);
+      atualizar._full = Date.now(); atualizar._novos = new Set();
+    } else {
+      const novos = await api(`envios?select=id,endereco,rodada,operador_id,contado_em,recebido_em,ativo,qtd_itens,total_unidades,resultado&inventario_id=eq.${invId}&recebido_em=gt.${q(ultimoEnvio)}&order=recebido_em.asc`);
+      atualizar._novos = new Set(novos.map(n => n.id));
+      envios = envios.concat(novos.filter(n => !envios.some(x => x.id === n.id)));
+      if (novos.length) confrontoEm = 0;   // força recarregar confronto se a aba estiver aberta
+      if (novos.some(n => !ops.has(n.operador_id))) await carregarOps();
+    }
+    if (envios.length) ultimoEnvio = envios[envios.length - 1].recebido_em;
+    if ((paginaAtual === 'confronto' || paginaAtual === 'sku' || paginaAtual === 'mapa') && Date.now() - confrontoEm > 60000) await carregarConfronto();
+    ultimaAtualizacao = Date.now();
+    renderTudo();
+  } catch (err) { setVivo(false); if (completo) toast(err.message, 'err'); }
+}
+async function carregarConfronto() {
+  confronto = await todos(`v_confronto?select=endereco,rua,chave,sku,codigo_nao_cadastrado,descricao,qtd_sistema,custo,c1,c2,c3,ultima,qtd_final,diferenca,valor_diferenca,status_item,status_endereco,rodada_atual&inventario_id=eq.${invId}&order=endereco,chave`);
+  confrontoEm = Date.now();
+}
+function renderTudo() {
+  if (paginaAtual === 'acomp') renderAcomp();
+  if (paginaAtual === 'mapa') renderMapa();
+  if (paginaAtual === 'confronto') renderConfronto();
+  if (paginaAtual === 'sku') renderSku();
+  if (paginaAtual === 'ops') renderProd();
+}
+
+$$('nav.abas button').forEach(b => b.onclick = async () => {
+  paginaAtual = b.dataset.p;
+  $$('nav.abas button').forEach(x => x.classList.toggle('on', x === b));
+  $$('.pagina').forEach(p => p.classList.toggle('on', p.id === 'p-' + paginaAtual));
+  if (['confronto', 'sku', 'mapa'].includes(paginaAtual) && invId && (!confronto || Date.now() - confrontoEm > 60000)) {
+    if (paginaAtual !== 'mapa') $('#' + (paginaAtual === 'sku' ? 's-tab' : 'c-tab')).innerHTML = '<div class="vazio">Carregando…</div>';
+    try { await carregarConfronto(); } catch (e) { toast(e.message, 'err'); }
+  }
+  renderTudo();
+});
+
+/* =====================================================================
+   ACOMPANHAMENTO
+   ===================================================================== */
+function contarStatus(lista) {
+  const c = { pendente: 0, em_contagem: 0, recontagem: 0, concluido: 0 };
+  for (const e of lista) c[e.status]++;
+  return c;
+}
+function legendaStatus(el) {
+  el.innerHTML = Object.values(ST).map(s => `<span><i style="background:${s.cor}"></i>${s.rot}</span>`).join('');
+}
+function renderAcomp() {
+  if (!invId) { $('#kpis').innerHTML = '<div class="vazio card">Crie um inventário na aba <b>Inventários</b> para começar.</div>'; return; }
+  const c = contarStatus(ends), tot = ends.length;
+  const p = pct(c.concluido, tot);
+  // ritmo: endereços finalizados na última hora (rodada que concluiu ou primeira contagem)
+  const umaHora = Date.now() - 3600000;
+  const ultHora = envios.filter(e => e.ativo && new Date(e.recebido_em) > umaHora).length;
+  const faltam = c.pendente + c.recontagem + c.em_contagem;
+  const prev = ultHora ? faltam / ultHora : null;
+  const acur = kpi && kpi.itens_contados ? pct(kpi.itens_ok, kpi.itens_contados) : null;
+  const operandoAgora = new Set(envios.filter(e => new Date(e.recebido_em) > Date.now() - 900000).map(e => e.operador_id));
+  ends.filter(e => e.status === 'em_contagem').forEach(e => operandoAgora.add(e.operador_atual));
+  const k = [
+    `<div class="kpi hero"><div><div class="r">Inventário concluído</div><div class="v">${p.toLocaleString('pt-BR')}%</div>
+       <div class="s">${fmt(c.concluido)} de ${fmt(tot)} endereços</div></div>
+       <div style="flex:1"><div class="prog">${['concluido', 'recontagem', 'em_contagem'].map(s => c[s] ? `<i style="width:${c[s] / tot * 100}%;background:${ST[s].cor}"></i>` : '').join('')}</div>
+       <div class="s" style="margin-top:6px">${fmt(c.pendente)} a contar · ${fmt(c.recontagem)} em recontagem · ${fmt(c.em_contagem)} contando agora</div></div></div>`,
+    `<div class="kpi"><div class="r">Ritmo (última hora)</div><div class="v">${fmt(ultHora)}</div><div class="s">endereços/hora · ${operandoAgora.size} operador(es) ativos</div></div>`,
+    `<div class="kpi"><div class="r">Previsão de término</div><div class="v">${prev == null ? '—' : prev < 1 ? '< 1h' : (Math.round(prev * 10) / 10).toLocaleString('pt-BR') + 'h'}</div><div class="s">${prev == null ? 'sem envios na última hora' : 'por volta de ' + hora(Date.now() + prev * 3600000)}</div></div>`,
+    `<div class="kpi"><div class="r">Acuracidade dos itens</div><div class="v">${acur == null ? '—' : acur.toLocaleString('pt-BR') + '%'}</div><div class="s">${kpi ? fmt(kpi.itens_ok) + ' de ' + fmt(kpi.itens_contados) + ' itens contados batem' : ''}</div></div>`,
+    `<div class="kpi"><div class="r">Saldo da divergência</div><div class="v">${kpi ? (kpi.saldo_und > 0 ? '+' : '') + fmt(kpi.saldo_und) : '—'}</div><div class="s">unidades${kpi && kpi.saldo_valor ? ' · ' + brl(kpi.saldo_valor) : ''}</div></div>`,
+    `<div class="kpi"><div class="r">Divergência absoluta</div><div class="v">${kpi ? fmt(kpi.diverg_abs_und) : '—'}</div><div class="s">${kpi ? `${fmt(kpi.itens_falta)} faltas · ${fmt(kpi.itens_sobra)} sobras${kpi.diverg_abs_valor ? ' · ' + brl(kpi.diverg_abs_valor) : ''}` : ''}</div></div>`
+  ];
+  $('#kpis').innerHTML = k.join('');
+
+  // ruas
+  legendaStatus($('#leg-status'));
+  const porRua = new Map();
+  for (const e of ends) { if (!porRua.has(e.rua)) porRua.set(e.rua, []); porRua.get(e.rua).push(e); }
+  const ruas = [...porRua.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'pt-BR', { numeric: true }));
+  $('#ruas-sub').textContent = ruas.length + ' ruas';
+  $('#ruas').innerHTML = ruas.map(([r, l]) => { const cc = contarStatus(l);
+    return `<div class="rua" title="${esc(r)}: ${cc.concluido} concluídos, ${cc.recontagem} recontagem, ${cc.em_contagem} contando, ${cc.pendente} a contar">
+      <div class="n">${esc(r)}</div>
+      <div class="barra">${['concluido', 'recontagem', 'em_contagem', 'pendente'].filter(s => cc[s]).map(s => `<i style="flex:${cc[s]};background:${ST[s].cor}"></i>`).join('')}</div>
+      <div class="c">${cc.concluido}/${l.length} · ${Math.round(cc.concluido / l.length * 100)}%</div></div>`; }).join('') || '<div class="vazio">Importe a base do inventário.</div>';
+
+  // feed
+  const novos = atualizar._novos || new Set();
+  $('#feed').innerHTML = envios.slice(-60).reverse().map(e => { const r = RES[e.resultado] || ['var(--mut)', e.resultado || ''];
+    return `<div class="ev ${novos.has(e.id) ? 'novo' : ''}"><div class="h">${hora(e.recebido_em)}</div>
+      <div><b>${esc(e.endereco)}</b> · ${esc(ops.get(e.operador_id)?.nome || '?')}<div class="mut" style="font-size:12px">${e.rodada}ª contagem · ${fmt(e.qtd_itens)} ${e.qtd_itens === 1 ? 'item' : 'itens'} · ${fmt(e.total_unidades)} unid.${e.ativo ? '' : ' · substituída'}</div></div>
+      <div>${tag(r[0], r[1])}</div></div>`; }).join('') || '<div class="vazio">Aguardando a primeira contagem…</div>';
+
+  // por hora
+  const agora = new Date(); agora.setMinutes(0, 0, 0);
+  const horas = []; for (let i = 11; i >= 0; i--) horas.push(new Date(agora - i * 3600000));
+  const cont = horas.map(h => envios.filter(e => { const d = new Date(e.recebido_em); return d >= h && d < new Date(+h + 3600000); }).length);
+  const max = Math.max(1, ...cont);
+  $('#horas').innerHTML = horas.map((h, i) => `<div class="b" title="${h.getHours()}h: ${cont[i]} endereços">${cont[i] ? `<em>${cont[i]}</em>` : ''}<i style="height:${cont[i] / max * 85}%"></i><span>${String(h.getHours()).padStart(2, '0')}h</span></div>`).join('');
+
+  // contando agora
+  const ag = ends.filter(e => e.status === 'em_contagem').sort((a, b) => new Date(a.iniciado_em) - new Date(b.iniciado_em));
+  $('#agora').innerHTML = ag.length ? `<table><tr><th>Endereço</th><th>Operador</th><th class="n">Há</th></tr>${ag.map(e =>
+    `<tr><td><b>${esc(e.endereco)}</b> ${e.rodada_atual > 1 ? tag(ST.recontagem.cor, e.rodada_atual + 'ª') : ''}</td><td>${esc(ops.get(e.operador_atual)?.nome || '?')}</td>
+     <td class="n" style="${minutos(e.iniciado_em) > 30 ? 'color:var(--crit);font-weight:700' : ''}">${minutos(e.iniciado_em)} min</td></tr>`).join('')}</table>`
+    : '<div class="vazio">Ninguém contando neste momento.</div>';
+}
+
+/* =====================================================================
+   MAPA DE ENDEREÇOS
+   ===================================================================== */
+['#m-busca', '#m-status', '#m-rua'].forEach(s => $(s).addEventListener('input', () => renderMapa()));
+function endDivergentes() {
+  const s = new Set(); if (confronto) for (const r of confronto) if (r.status_item === 'falta' || r.status_item === 'sobra') s.add(r.endereco);
+  return s;
+}
+function filtrarEnds() {
+  const b = $('#m-busca').value.trim().toUpperCase(), st = $('#m-status').value, rua = $('#m-rua').value;
+  const div = endDivergentes();
+  return ends.filter(e => (!b || e.endereco.includes(b)) && (!rua || e.rua === rua) &&
+    (!st || (st === 'div' ? e.status === 'concluido' && div.has(e.endereco) : st === 'fora' ? !e.na_base : e.status === st)));
+}
+function renderMapa() {
+  const ruas = [...new Set(ends.map(e => e.rua))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }));
+  const sel = $('#m-rua').value;
+  $('#m-rua').innerHTML = '<option value="">Todas</option>' + ruas.map(r => `<option ${r === sel ? 'selected' : ''}>${esc(r)}</option>`).join('');
+  $('#leg-mapa').innerHTML = `<span><i style="background:#ecebe6;border:1px solid #ccc"></i>A contar</span><span><i style="background:#2a78d6"></i>Em contagem</span>
+    <span><i style="background:#6250d6"></i>Recontagem</span><span><i style="background:#d6f0d6;border:1px solid #9c9"></i>Concluído</span>
+    <span><i style="background:#d6f0d6;box-shadow:inset 0 -3px 0 var(--crit)"></i>Concluído com divergência</span>`;
+  const div = endDivergentes();
+  const l = filtrarEnds();
+  const g = new Map(); for (const e of l) { if (!g.has(e.rua)) g.set(e.rua, []); g.get(e.rua).push(e); }
+  const lim = 4000; let n = 0;
+  $('#mapa').innerHTML = [...g.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'pt-BR', { numeric: true })).map(([r, es]) => {
+    if (n > lim) return '';
+    return `<div class="linha"><div class="n">${esc(r)}</div><div class="cel">${es.map(e => { n++;
+      return n > lim ? '' : `<div class="e s-${e.status} ${e.status === 'concluido' && div.has(e.endereco) ? 'div' : ''}" data-e="${esc(e.endereco)}" title="${esc(e.endereco)} · ${ST[e.status].rot}${e.rodada_atual > 1 ? ' · ' + e.rodada_atual + 'ª contagem' : ''}${e.na_base ? '' : ' · fora da base'}">${esc(e.endereco)}</div>`; }).join('')}</div></div>`;
+  }).join('') + (n > lim ? `<div class="mut">Mostrando ${lim} de ${l.length} — use os filtros.</div>` : '') || '<div class="vazio">Nenhum endereço.</div>';
+  $$('#mapa [data-e]').forEach(el => el.onclick = () => abrirEndereco(el.dataset.e));
+}
+$('#m-aplicar').onclick = async () => {
+  const acao = $('#m-acao').value; if (!acao) return toast('Escolha a ação', 'err');
+  const l = filtrarEnds().map(e => e.endereco);
+  if (!l.length) return toast('Nenhum endereço no filtro', 'err');
+  const nomes = { recontar: 'mandar RECONTAR', concluir: 'marcar como CONCLUÍDO', liberar: 'LIBERAR', zerar: 'ZERAR as contagens de' };
+  if (!confirm(`Vai ${nomes[acao]} ${l.length} endereço(s) do filtro atual. Confirma?`)) return;
+  await acaoEnderecos(l, acao);
+};
+async function acaoEnderecos(lista, acao) {
+  try {
+    let tot = 0;
+    for (let i = 0; i < lista.length; i += 500) { const r = await rpc('adm_enderecos', { p_inventario: invId, p_enderecos: lista.slice(i, i + 500), p_acao: acao }); tot += r.afetados; }
+    toast(`${tot} endereço(s) atualizados`, 'ok'); confrontoEm = 0; await atualizar(true);
+    return true;
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function abrirEndereco(end) {
+  $('#gaveta').classList.add('on'); $('#g-tit').textContent = end; $('#g-corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  const e = ends.find(x => x.endereco === end);
+  $('#g-sub').innerHTML = e ? `${tag(ST[e.status].cor, ST[e.status].rot)} ${e.rodada_atual > 1 ? e.rodada_atual + 'ª contagem' : ''} ${e.na_base ? '' : '· fora da base'}` : '';
+  try {
+    const [itens, evs] = await Promise.all([
+      api(`v_confronto?inventario_id=eq.${invId}&endereco=eq.${q(end)}&order=chave`),
+      api(`envios?inventario_id=eq.${invId}&endereco=eq.${q(end)}&order=recebido_em`)
+    ]);
+    $('#g-corpo').innerHTML = `
+      <div class="acoes" style="justify-content:flex-start">
+        <button data-a="recontar">Mandar recontar</button><button class="sec" data-a="concluir">Marcar concluído</button>
+        <button class="sec" data-a="liberar">Liberar</button><button class="err" data-a="zerar">Zerar contagens</button></div>
+      <div class="card"><h3>Itens</h3>${tabelaConfronto(itens, true)}</div>
+      <div class="card"><h3>Histórico de contagens</h3>${evs.length ? `<table><tr><th>Recebido</th><th>Operador</th><th>Contagem</th><th class="n">Itens</th><th class="n">Unid.</th><th>Resultado</th></tr>
+        ${evs.map(v => `<tr style="${v.ativo ? '' : 'opacity:.5;text-decoration:line-through'}"><td>${dataHora(v.recebido_em)}</td><td>${esc(ops.get(v.operador_id)?.nome || '?')}</td>
+          <td>${v.rodada}ª</td><td class="n">${fmt(v.qtd_itens)}</td><td class="n">${fmt(v.total_unidades)}</td><td>${RES[v.resultado] ? tag(...RES[v.resultado]) : esc(v.resultado || '')}</td></tr>`).join('')}</table>` : '<div class="mut">Ainda não contado.</div>'}</div>`;
+    $$('#g-corpo [data-a]').forEach(b => b.onclick = async () => {
+      if (b.dataset.a === 'zerar' && !confirm('Zerar todas as contagens deste endereço? Ele volta para "a contar".')) return;
+      if (await acaoEnderecos([end], b.dataset.a)) abrirEndereco(end);
+    });
+  } catch (err) { $('#g-corpo').innerHTML = `<div class="vazio">${esc(err.message)}</div>`; }
+}
+$('#g-fechar').onclick = () => $('#gaveta').classList.remove('on');
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { $('#gaveta').classList.remove('on'); $('#modal').classList.remove('on'); } });
+
+/* =====================================================================
+   CONFRONTO
+   ===================================================================== */
+function tabelaConfronto(l, compacto) {
+  if (!l.length) return '<div class="vazio">Nenhum item.</div>';
+  const temC2 = l.some(r => r.c2 != null), temC3 = l.some(r => r.c3 != null), temCusto = l.some(r => r.custo != null);
+  return `<table><thead><tr>${compacto ? '' : '<th>Endereço</th>'}<th>SKU</th><th>Descrição</th><th class="n">Sistema</th><th class="n">1ª</th>${temC2 ? '<th class="n">2ª</th>' : ''}${temC3 ? '<th class="n">3ª</th>' : ''}
+    <th class="n">Final</th><th class="n">Diferença</th>${temCusto ? '<th class="n">Valor dif.</th>' : ''}<th>Situação</th></tr></thead><tbody>
+    ${l.map(r => `<tr class="${compacto ? '' : 'click'}" data-e="${esc(r.endereco)}">${compacto ? '' : `<td><b>${esc(r.endereco)}</b></td>`}
+      <td>${r.sku ? esc(r.sku) : `<span class="tag" style="background:#fde7e7">não cadastrado: ${esc(r.codigo_nao_cadastrado)}</span>`}</td>
+      <td>${esc(r.descricao || '')}</td><td class="n">${fmt(r.qtd_sistema)}</td><td class="n">${fmt(r.c1)}</td>
+      ${temC2 ? `<td class="n">${fmt(r.c2)}</td>` : ''}${temC3 ? `<td class="n">${fmt(r.c3)}</td>` : ''}
+      <td class="n"><b>${fmt(r.qtd_final)}</b></td>
+      <td class="n" style="font-weight:700">${r.diferenca == null ? '' : (r.diferenca > 0 ? '+' : '') + fmt(r.diferenca)}</td>
+      ${temCusto ? `<td class="n">${r.valor_diferenca ? brl(r.valor_diferenca) : ''}</td>` : ''}
+      <td>${tag(SIT[r.status_item].cor, SIT[r.status_item].rot)}</td></tr>`).join('')}</tbody></table>`;
+}
+['#c-busca', '#c-sit', '#c-rua'].forEach(s => $(s).addEventListener('input', () => renderConfronto()));
+function filtrarConfronto() {
+  const b = $('#c-busca').value.trim().toUpperCase(), sit = $('#c-sit').value, rua = $('#c-rua').value;
+  return (confronto || []).filter(r => (!rua || r.rua === rua) &&
+    (!sit || (sit === 'div' ? (r.status_item === 'falta' || r.status_item === 'sobra') : sit === 'naocad' ? r.codigo_nao_cadastrado : r.status_item === sit)) &&
+    (!b || r.endereco.includes(b) || String(r.sku || r.codigo_nao_cadastrado).toUpperCase().includes(b) || String(r.descricao || '').toUpperCase().includes(b)));
+}
+function renderConfronto() {
+  if (!confronto) return;
+  const ruas = [...new Set(confronto.map(r => r.rua))].filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }));
+  const sel = $('#c-rua').value;
+  $('#c-rua').innerHTML = '<option value="">Todas</option>' + ruas.map(r => `<option ${r === sel ? 'selected' : ''}>${esc(r)}</option>`).join('');
+  const l = filtrarConfronto();
+  const soma = (f) => l.reduce((s, r) => s + (Number(r[f]) || 0), 0);
+  $('#c-kpis').innerHTML = `<div class="kpi"><div class="r">Linhas no filtro</div><div class="v">${fmt(l.length)}</div></div>
+    <div class="kpi"><div class="r">Sistema</div><div class="v">${fmt(soma('qtd_sistema'))}</div><div class="s">unidades</div></div>
+    <div class="kpi"><div class="r">Contado (final)</div><div class="v">${fmt(soma('qtd_final'))}</div><div class="s">unidades</div></div>
+    <div class="kpi"><div class="r">Diferença</div><div class="v">${fmt(soma('diferenca'))}</div><div class="s">${l.some(r => r.valor_diferenca) ? brl(soma('valor_diferenca')) : 'unidades'}</div></div>`;
+  const lim = 1500;
+  $('#c-tab').innerHTML = tabelaConfronto(l.slice(0, lim)) + (l.length > lim ? `<div class="mut" style="padding:10px">Mostrando ${lim} de ${fmt(l.length)} linhas — exporte para ver tudo.</div>` : '');
+  $$('#c-tab tr.click').forEach(tr => tr.onclick = () => abrirEndereco(tr.dataset.e));
+}
+$('#c-atualizar').onclick = async () => { $('#c-tab').innerHTML = '<div class="vazio">Carregando…</div>'; await carregarConfronto(); renderConfronto(); };
+$('#c-exportar').onclick = () => {
+  const l = filtrarConfronto().map(r => ({ 'Endereço': r.endereco, 'Rua': r.rua, 'SKU': r.sku || '', 'Código não cadastrado': r.codigo_nao_cadastrado || '',
+    'Descrição': r.descricao || '', 'Sistema': num(r.qtd_sistema), '1ª contagem': num(r.c1), '2ª contagem': num(r.c2), '3ª contagem': num(r.c3),
+    'Quantidade final': num(r.qtd_final), 'Diferença': num(r.diferenca), 'Custo unit.': num(r.custo), 'Valor da diferença': num(r.valor_diferenca),
+    'Situação': SIT[r.status_item].rot.replace(/^\S+ /, ''), 'Status do endereço': ST[r.status_endereco]?.rot || '' }));
+  exportar(l, 'Confronto', `confronto_${nomeArq()}.xlsx`);
+};
+const num = v => v == null ? null : Number(v);
+const nomeArq = () => (inv()?.nome || 'inventario').normalize('NFD').replace(/[^\w]+/g, '_') + '_' + new Date().toISOString().slice(0, 10);
+function exportar(linhas, aba, nome) {
+  if (!window.XLSX) return toast('Biblioteca do Excel não carregou (sem internet?)', 'err');
+  const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(linhas);
+  ws['!cols'] = Object.keys(linhas[0] || {}).map(k => ({ wch: Math.max(10, k.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, ws, aba); XLSX.writeFile(wb, nome);
+}
+
+/* =====================================================================
+   POR SKU
+   ===================================================================== */
+function porSku() {
+  const m = new Map();
+  for (const r of confronto || []) {
+    const k = r.sku || ('?' + r.codigo_nao_cadastrado);
+    if (!m.has(k)) m.set(k, { sku: r.sku, cod: r.codigo_nao_cadastrado, desc: r.descricao, sis: 0, sisCont: 0, cont: 0, ends: 0, endsCont: 0, custo: r.custo, falta: 0, sobra: 0 });
+    const s = m.get(k);
+    s.sis += Number(r.qtd_sistema) || 0; s.ends++;
+    if (r.qtd_final != null) { s.endsCont++; s.cont += Number(r.qtd_final); s.sisCont += Number(r.qtd_sistema) || 0;
+      if (r.status_item === 'falta') s.falta++; if (r.status_item === 'sobra') s.sobra++; }
+    if (s.custo == null && r.custo != null) s.custo = r.custo; if (!s.desc) s.desc = r.descricao;
+  }
+  return [...m.values()].map(s => ({ ...s, dif: s.cont - s.sisCont, realoc: s.falta && s.sobra && s.cont === s.sisCont }));
+}
+['#s-busca', '#s-sit'].forEach(s => $(s).addEventListener('input', () => renderSku()));
+function filtrarSku() {
+  const b = $('#s-busca').value.trim().toUpperCase(), sit = $('#s-sit').value;
+  return porSku().filter(s => (!sit || (sit === 'div' ? s.dif !== 0 : s.realoc)) &&
+    (!b || String(s.sku || s.cod).toUpperCase().includes(b) || String(s.desc || '').toUpperCase().includes(b)))
+    .sort((a, b) => Math.abs(b.dif * (b.custo || 1)) - Math.abs(a.dif * (a.custo || 1)));
+}
+function renderSku() {
+  if (!confronto) return;
+  const l = filtrarSku(); const lim = 1500;
+  $('#s-tab').innerHTML = l.length ? `<table><thead><tr><th>SKU</th><th>Descrição</th><th class="n">Endereços (contados)</th><th class="n">Sistema total</th>
+    <th class="n">Sistema nos contados</th><th class="n">Contado</th><th class="n">Diferença</th><th class="n">Valor</th><th>Situação</th></tr></thead><tbody>
+    ${l.slice(0, lim).map(s => `<tr><td>${s.sku ? esc(s.sku) : 'não cadastrado: ' + esc(s.cod)}</td><td>${esc(s.desc || '')}</td>
+      <td class="n">${s.ends} (${s.endsCont})</td><td class="n">${fmt(s.sis)}</td><td class="n">${fmt(s.sisCont)}</td><td class="n"><b>${fmt(s.cont)}</b></td>
+      <td class="n" style="font-weight:700">${(s.dif > 0 ? '+' : '') + fmt(s.dif)}</td><td class="n">${s.custo != null && s.dif ? brl(s.dif * s.custo) : ''}</td>
+      <td>${s.realoc ? tag('var(--warn)', '⇄ Realocar') : s.dif < 0 ? tag(SIT.falta.cor, SIT.falta.rot) : s.dif > 0 ? tag(SIT.sobra.cor, SIT.sobra.rot) : s.endsCont ? tag(SIT.ok.cor, SIT.ok.rot) : tag(SIT.nao_contado.cor, SIT.nao_contado.rot)}</td></tr>`).join('')}
+    </tbody></table>${l.length > lim ? `<div class="mut">Mostrando ${lim} de ${l.length}</div>` : ''}` : '<div class="vazio">Nenhum SKU neste filtro.</div>';
+}
+$('#s-exportar').onclick = () => exportar(filtrarSku().map(s => ({ 'SKU': s.sku || '', 'Código não cadastrado': s.cod || '', 'Descrição': s.desc || '',
+  'Endereços': s.ends, 'Endereços contados': s.endsCont, 'Sistema total': s.sis, 'Sistema nos endereços contados': s.sisCont, 'Contado': s.cont,
+  'Diferença': s.dif, 'Custo unit.': num(s.custo), 'Valor da diferença': s.custo != null ? s.dif * s.custo : null, 'Realocar': s.realoc ? 'Sim' : '' })),
+  'Por SKU', `por_sku_${nomeArq()}.xlsx`);
+
+/* =====================================================================
+   OPERADORES
+   ===================================================================== */
+function renderProd() {
+  const m = new Map();
+  for (const e of envios) {
+    if (!m.has(e.operador_id)) m.set(e.operador_id, { n: 0, rec: 0, itens: 0, und: 0, ini: e.recebido_em, fim: e.recebido_em, r1: 0, r1div: 0, horas: new Set() });
+    const s = m.get(e.operador_id);
+    s.n++; s.itens += e.qtd_itens; s.und += Number(e.total_unidades); s.fim = e.recebido_em;
+    s.horas.add(new Date(e.recebido_em).toISOString().slice(0, 13));
+    if (e.rodada > 1) s.rec++;
+    if (e.rodada === 1) { s.r1++; if (e.resultado === 'divergente_recontar' || e.resultado === 'concluido_com_divergencia') s.r1div++; }
+  }
+  const l = [...m.entries()].sort((a, b) => b[1].n - a[1].n);
+  $('#o-prod').innerHTML = l.length ? `<table><tr><th>Operador</th><th class="n">Endereços</th><th class="n">Recontagens feitas</th><th class="n">Itens</th><th class="n">Unidades</th>
+    <th class="n">Horas ativas</th><th class="n">Endereços/hora</th><th class="n">1ª contagem divergente</th><th>Primeiro</th><th>Último</th></tr>
+    ${l.map(([id, s]) => `<tr><td><b>${esc(ops.get(id)?.nome || '?')}</b></td><td class="n">${s.n}</td><td class="n">${s.rec}</td><td class="n">${fmt(s.itens)}</td><td class="n">${fmt(s.und)}</td>
+      <td class="n">${s.horas.size}</td><td class="n">${fmt(Math.round(s.n / Math.max(1, s.horas.size) * 10) / 10)}</td>
+      <td class="n">${s.r1 ? pct(s.r1div, s.r1).toLocaleString('pt-BR') + '%' : '—'}</td><td>${dataHora(s.ini)}</td><td>${dataHora(s.fim)}</td></tr>`).join('')}</table>
+    <div class="mut" style="margin-top:8px;font-size:12px">“1ª contagem divergente” = % das primeiras contagens do operador que não bateram com o sistema. Valores altos em um só operador podem indicar falta de atenção ou de treinamento.</div>`
+    : '<div class="vazio">Sem contagens neste inventário ainda.</div>';
+}
+function renderOps() {
+  const l = [...ops.values()];
+  $('#o-lista').innerHTML = l.length ? `<table><tr><th>Nome</th><th>Matrícula</th><th>Situação</th><th></th></tr>
+    ${l.map(o => `<tr><td><b>${esc(o.nome)}</b></td><td>${esc(o.matricula)}</td><td>${o.ativo ? tag('var(--good)', 'Ativo') : tag('var(--st-pend)', 'Inativo')}</td>
+      <td style="text-align:right"><button class="link" data-ed="${o.id}">Editar / trocar PIN</button></td></tr>`).join('')}</table>`
+    : '<div class="vazio">Cadastre os operadores que vão contar.</div>';
+  $$('#o-lista [data-ed]').forEach(b => b.onclick = () => formOperador(ops.get(+b.dataset.ed)));
+}
+$('#o-novo').onclick = () => formOperador(null);
+function formOperador(o) {
+  abrirModal(`<h3>${o ? 'Editar operador' : 'Novo operador'}</h3>
+    <div class="form"><label>Nome<input id="fo-nome" value="${esc(o?.nome || '')}"></label>
+    <label>Matrícula (login no app)<input id="fo-mat" value="${esc(o?.matricula || '')}"></label>
+    <label>${o ? 'Novo PIN (deixe vazio para manter)' : 'PIN (4 a 8 números)'}<input id="fo-pin" inputmode="numeric" maxlength="8"></label></div>
+    ${o ? `<label class="chk"><input type="checkbox" id="fo-ativo" ${o.ativo ? 'checked' : ''}> Ativo (pode entrar no app)</label>` : ''}
+    <div class="acoes"><button class="sec" data-fechar>Cancelar</button><button id="fo-ok">Salvar</button></div>`);
+  $('#fo-ok').onclick = async () => {
+    const nome = $('#fo-nome').value.trim(), mat = $('#fo-mat').value.trim(), pin = $('#fo-pin').value.trim();
+    if (!nome || !mat) return toast('Nome e matrícula são obrigatórios', 'err');
+    if ((!o || pin) && !/^\d{4,8}$/.test(pin)) return toast('PIN deve ter de 4 a 8 números', 'err');
+    const corpo = { nome, matricula: mat }; if (pin) corpo.pin = pin; if (o) corpo.ativo = $('#fo-ativo').checked;
+    try {
+      if (o) await api(`operadores?id=eq.${o.id}`, { method: 'PATCH', body: corpo });
+      else await api('operadores', { method: 'POST', body: corpo });
+      fecharModal(); toast('Operador salvo', 'ok'); carregarOps();
+    } catch (e) { toast(/duplicate|unique/.test(e.message) ? 'Já existe operador com essa matrícula' : e.message, 'err'); }
+  };
+}
+
+/* =====================================================================
+   INVENTÁRIOS + IMPORTAÇÃO
+   ===================================================================== */
+function renderInvs() {
+  $('#i-lista').innerHTML = invs.length ? `<table><tr><th>Nome</th><th>Criado</th><th>Regras</th><th>Situação</th><th></th></tr>
+    ${invs.map(i => `<tr style="${i.id === invId ? 'background:#f4f7fc' : ''}"><td><b>${esc(i.nome)}</b><div class="mut">${esc(i.descricao || '')}</div></td><td>${dataHora(i.criado_em)}</td>
+      <td class="ink2" style="font-size:12px">${[i.contagem_cega ? 'cega' : 'mostra saldo', i.recontagem_auto ? `recontagem automática (até ${i.max_rodadas}ª)` : 'sem recontagem automática',
+        i.recontagem_outro_operador ? 'recontagem por outro operador' : '', +i.tolerancia ? 'tolerância ' + fmt(i.tolerancia) : ''].filter(Boolean).join(' · ')}</td>
+      <td>${i.status === 'aberto' ? tag('var(--good)', 'Aberto') : tag('var(--st-pend)', 'Encerrado')}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="link" data-sel="${i.id}">Selecionar</button><button class="link" data-ed="${i.id}">Regras</button>
+        <button class="link" data-st="${i.id}">${i.status === 'aberto' ? 'Encerrar' : 'Reabrir'}</button></td></tr>`).join('')}</table>`
+    : '<div class="vazio">Nenhum inventário ainda.</div>';
+  $$('#i-lista [data-sel]').forEach(b => b.onclick = () => { $('#sel-inv').value = b.dataset.sel; $('#sel-inv').onchange(); });
+  $$('#i-lista [data-ed]').forEach(b => b.onclick = () => formInventario(invs.find(i => i.id === +b.dataset.ed)));
+  $$('#i-lista [data-st]').forEach(b => b.onclick = async () => {
+    const i = invs.find(x => x.id === +b.dataset.st); const enc = i.status === 'aberto';
+    if (enc && !confirm(`Encerrar "${i.nome}"? Os operadores não poderão mais enviar contagens.`)) return;
+    try { await api(`inventarios?id=eq.${i.id}`, { method: 'PATCH', body: { status: enc ? 'encerrado' : 'aberto', encerrado_em: enc ? new Date().toISOString() : null } }); await carregarInvs(); toast('Feito', 'ok'); }
+    catch (e) { toast(e.message, 'err'); }
+  });
+  $('#i-base-sub').textContent = inv() ? '— ' + inv().nome : '';
+  $('#i-base').style.display = inv() ? '' : 'none';
+}
+$('#i-novo').onclick = () => formInventario(null);
+function formInventario(i) {
+  const v = i || { contagem_cega: true, recontagem_auto: true, recontagem_outro_operador: true, max_rodadas: 3, tolerancia: 0, permitir_fora_base: true };
+  abrirModal(`<h3>${i ? 'Regras do inventário' : 'Novo inventário'}</h3>
+    <div class="form"><label>Nome<input id="fi-nome" value="${esc(i?.nome || 'Inventário ' + new Date().toLocaleDateString('pt-BR'))}"></label>
+    <label>Descrição<input id="fi-desc" value="${esc(i?.descricao || '')}" placeholder="Ex.: geral Galpão Principal"></label>
+    <label>Máximo de contagens por endereço<select id="fi-max">${[1, 2, 3, 4, 5].map(n => `<option ${n === v.max_rodadas ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+    <label>Tolerância (unidades aceitas sem recontar)<input id="fi-tol" type="number" min="0" step="any" value="${v.tolerancia}"></label></div>
+    <label class="chk"><input type="checkbox" id="fi-cega" ${v.contagem_cega ? 'checked' : ''}> Contagem cega — o operador não vê o saldo do sistema (recomendado)</label>
+    <label class="chk"><input type="checkbox" id="fi-auto" ${v.recontagem_auto ? 'checked' : ''}> Divergência gera recontagem automática</label>
+    <label class="chk"><input type="checkbox" id="fi-outro" ${v.recontagem_outro_operador ? 'checked' : ''}> Recontagem obrigatoriamente por outro operador</label>
+    <label class="chk"><input type="checkbox" id="fi-fora" ${v.permitir_fora_base ? 'checked' : ''}> Aceitar endereços que não estão na base</label>
+    <div class="dica">Como funciona a recontagem: se a 1ª contagem bate com o sistema, o endereço é concluído. Se não bate, volta para recontagem. A 2ª contagem conclui se bater com o sistema <b>ou</b> com a 1ª (divergência confirmada). Se ainda divergir, vai para a 3ª, que decide.</div>
+    <div class="acoes"><button class="sec" data-fechar>Cancelar</button><button id="fi-ok">${i ? 'Salvar' : 'Criar'}</button></div>`);
+  $('#fi-ok').onclick = async () => {
+    const corpo = { nome: $('#fi-nome').value.trim(), descricao: $('#fi-desc').value.trim() || null, max_rodadas: +$('#fi-max').value,
+      tolerancia: +$('#fi-tol').value || 0, contagem_cega: $('#fi-cega').checked, recontagem_auto: $('#fi-auto').checked,
+      recontagem_outro_operador: $('#fi-outro').checked, permitir_fora_base: $('#fi-fora').checked };
+    if (!corpo.nome) return toast('Informe o nome', 'err');
+    try {
+      if (i) await api(`inventarios?id=eq.${i.id}`, { method: 'PATCH', body: corpo });
+      else { const r = await api('inventarios', { method: 'POST', body: corpo, prefer: 'return=representation' }); invId = r[0].id; LS.set('inv', invId); }
+      fecharModal(); await carregarInvs(); await atualizar(true);
+      toast(i ? 'Regras salvas' : 'Inventário criado — agora importe a base', 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  };
+}
+
+const normCab = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const CAMPOS = [
+  { k: 'endereco', rot: 'Endereço', ob: true, re: /endere|local|posi|^loc|^end$|bin|slot/ },
+  { k: 'sku', rot: 'SKU / código do produto', ob: true, re: /^sku|cod.*(prod|item|mat)|^codigo$|^cod$|^produto$|^item$|material|referencia|^ref/ },
+  { k: 'descricao', rot: 'Descrição', re: /desc|nome/ },
+  { k: 'ean', rot: 'EAN / código de barras', re: /ean|barra|gtin|upc/ },
+  { k: 'qtd', rot: 'Quantidade no sistema', ob: true, re: /qtd|quant|saldo|estoque|sistema|^qt/ },
+  { k: 'custo', rot: 'Custo unitário (opcional)', re: /custo|unit|preco|valor/ }
+];
+function lerPlanilha(arq) {
+  return new Promise((ok, no) => {
+    if (!window.XLSX) return no(new Error('Biblioteca do Excel não carregou (sem internet?)'));
+    const fr = new FileReader();
+    fr.onload = () => { try {
+      const wb = XLSX.read(new Uint8Array(fr.result), { type: 'array', raw: false, codepage: 65001 });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      ok(XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: false }));
+    } catch (e) { no(e); } };
+    fr.onerror = () => no(fr.error); fr.readAsArrayBuffer(arq);
+  });
+}
+const parseNum = v => { if (typeof v === 'number') return v; let s = String(v ?? '').trim().replace(/\s/g, ''); if (!s) return null;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); const n = Number(s); return isNaN(n) ? null : n; };
+const txt = v => typeof v === 'number' ? (Number.isInteger(v) ? String(v) : String(v)) : String(v ?? '').trim();
+
+$('#i-arq').onchange = async e => {
+  const arq = e.target.files[0]; e.target.value = ''; if (!arq) return;
+  try {
+    const linhas = await lerPlanilha(arq);
+    if (linhas.length < 2) return toast('Planilha vazia', 'err');
+    const cab = linhas[0].map(c => String(c)); const dadosL = linhas.slice(1);
+    const usados = new Set();
+    const mapa = {}; for (const c of CAMPOS) { const ix = cab.findIndex((h, i) => !usados.has(i) && c.re.test(normCab(h))); if (ix >= 0) { mapa[c.k] = ix; usados.add(ix); } }
+    const opts = sel => '<option value="">— não tem —</option>' + cab.map((h, i) => `<option value="${i}" ${sel === i ? 'selected' : ''}>${esc(h || 'Coluna ' + (i + 1))}</option>`).join('');
+    $('#i-map').innerHTML = `<div class="card" style="background:#fff"><h3>Conferir colunas <small>${esc(arq.name)} · ${fmt(dadosL.length)} linhas</small></h3>
+      <div class="form">${CAMPOS.map(c => `<label>${c.rot}${c.ob ? ' *' : ''}<select data-c="${c.k}">${opts(mapa[c.k])}</select></label>`).join('')}</div>
+      <div id="i-prev" style="margin-top:12px"></div>
+      <div class="acoes" style="margin-top:12px"><button class="sec" id="i-cancel">Cancelar</button><button id="i-importar">Importar</button></div>
+      <div id="i-prog" class="mut"></div></div>`;
+    const lerMapa = () => Object.fromEntries($$('#i-map [data-c]').map(s => [s.dataset.c, s.value === '' ? null : +s.value]));
+    const montarItens = m => {
+      const ag = new Map();
+      for (const l of dadosL) {
+        const end = m.endereco != null ? txt(l[m.endereco]) : '', sku = m.sku != null ? txt(l[m.sku]) : '';
+        if (!end || !sku) continue;
+        const k = end.toUpperCase() + '\u0001' + sku;
+        const it = ag.get(k) || { endereco: end, sku, descricao: '', eans: new Set(), qtd: 0, custo: null };
+        if (m.descricao != null && l[m.descricao] !== '') it.descricao = txt(l[m.descricao]);
+        if (m.ean != null && l[m.ean] !== '') txt(l[m.ean]).split(/[;,|/ ]+/).filter(Boolean).forEach(x => it.eans.add(x));
+        if (m.qtd != null) it.qtd += parseNum(l[m.qtd]) || 0;
+        if (m.custo != null && parseNum(l[m.custo]) != null) it.custo = parseNum(l[m.custo]);
+        ag.set(k, it);
+      }
+      return [...ag.values()].map(i => ({ ...i, ean: [...i.eans].join(';'), eans: undefined }));
+    };
+    const prev = () => { const m = lerMapa(); const it = montarItens(m);
+      $('#i-prev').innerHTML = `<div class="ink2" style="margin-bottom:6px">Prévia: <b>${fmt(it.length)}</b> itens (endereço × SKU) em <b>${fmt(new Set(it.map(i => i.endereco.toUpperCase())).size)}</b> endereços · ${fmt(it.reduce((s, i) => s + i.qtd, 0))} unidades</div>
+        <table><tr><th>Endereço</th><th>SKU</th><th>Descrição</th><th>EAN</th><th class="n">Qtd</th><th class="n">Custo</th></tr>
+        ${it.slice(0, 6).map(i => `<tr><td>${esc(i.endereco)}</td><td>${esc(i.sku)}</td><td>${esc(i.descricao)}</td><td>${esc(i.ean)}</td><td class="n">${fmt(i.qtd)}</td><td class="n">${i.custo == null ? '' : brl(i.custo)}</td></tr>`).join('')}</table>`; };
+    $$('#i-map [data-c]').forEach(s => s.onchange = prev); prev();
+    $('#i-cancel').onclick = () => $('#i-map').innerHTML = '';
+    $('#i-importar').onclick = async () => {
+      const m = lerMapa();
+      if (m.endereco == null || m.sku == null || m.qtd == null) return toast('Endereço, SKU e Quantidade são obrigatórios', 'err');
+      const it = montarItens(m); if (!it.length) return toast('Nenhuma linha válida', 'err');
+      $('#i-importar').disabled = true;
+      try {
+        let tot = { itens: 0, codigos: 0, enderecos: 0 };
+        for (let i = 0; i < it.length; i += 1000) {
+          $('#i-prog').textContent = `Enviando ${fmt(Math.min(i + 1000, it.length))} de ${fmt(it.length)}…`;
+          const r = await rpc('adm_importar_base', { p_inventario: invId, p_itens: it.slice(i, i + 1000) });
+          tot.itens += r.itens; tot.codigos += r.codigos;
+        }
+        $('#i-map').innerHTML = `<div class="dica">✔ Base importada: ${fmt(tot.itens)} itens e ${fmt(tot.codigos)} códigos de leitura. Os operadores precisam tocar em <b>Menu → Atualizar dados</b> no app se já estavam com o inventário aberto.</div>`;
+        confrontoEm = 0; await atualizar(true);
+      } catch (err) { toast(err.message, 'err'); $('#i-importar').disabled = false; }
+    };
+  } catch (err) { toast('Não consegui ler o arquivo: ' + err.message, 'err'); }
+};
+$('#i-arq-cx').onchange = async e => {
+  const arq = e.target.files[0]; e.target.value = ''; if (!arq) return;
+  try {
+    const l = await lerPlanilha(arq); const cab = l[0].map(normCab);
+    const ic = cab.findIndex(h => /dun|caixa|barra|ean|^cod/.test(h) && !/prod|sku/.test(h)), is = cab.findIndex(h => /sku|prod|item|material/.test(h)), ifa = cab.findIndex(h => /fator|qtd|quant|mult|emb/.test(h));
+    if (ic < 0 || is < 0 || ifa < 0) return toast('A planilha precisa das colunas: Código da caixa, SKU e Fator', 'err');
+    const it = l.slice(1).map(r => ({ codigo: txt(r[ic]), sku: txt(r[is]), fator: parseNum(r[ifa]) })).filter(x => x.codigo && x.sku && x.fator > 0);
+    if (!confirm(`Importar ${it.length} códigos de caixa?`)) return;
+    let n = 0; for (let i = 0; i < it.length; i += 2000) n += (await rpc('adm_importar_codigos', { p_inventario: invId, p_itens: it.slice(i, i + 2000) })).codigos;
+    toast(`${n} códigos de caixa importados`, 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+};
+$('#i-arq-end').onchange = async e => {
+  const arq = e.target.files[0]; e.target.value = ''; if (!arq) return;
+  try {
+    const l = (await lerPlanilha(arq)).map(r => txt(r[0])).filter(Boolean);
+    if (/endere|local|posi/i.test(normCab(l[0]))) l.shift();
+    if (!confirm(`Adicionar ${l.length} endereços para contagem?`)) return;
+    let n = 0; for (let i = 0; i < l.length; i += 5000) n += (await rpc('adm_importar_enderecos', { p_inventario: invId, p_enderecos: l.slice(i, i + 5000) })).enderecos;
+    toast(`${n} endereços novos adicionados`, 'ok'); await atualizar(true);
+  } catch (err) { toast(err.message, 'err'); }
+};
+$('#i-limpar').onclick = async () => {
+  if (!confirm('Apagar toda a base (saldos, códigos e endereços) deste inventário? Só é permitido antes de começar a contagem.')) return;
+  try { await rpc('adm_limpar_base', { p_inventario: invId }); toast('Base apagada', 'ok'); confronto = null; await atualizar(true); } catch (e) { toast(e.message, 'err'); }
+};
+$('#i-modelo').onclick = () => exportar([
+  { 'Endereço': 'A-01-01-1', 'SKU': '100234', 'Descrição': 'Exemplo produto 1', 'EAN': '7891234567895', 'Quantidade': 24, 'Custo unitário': 12.5 },
+  { 'Endereço': 'A-01-01-1', 'SKU': '100777', 'Descrição': 'Exemplo produto 2', 'EAN': '7899876543210', 'Quantidade': 6, 'Custo unitário': 40 },
+  { 'Endereço': 'A-01-02-1', 'SKU': '100234', 'Descrição': 'Exemplo produto 1', 'EAN': '7891234567895', 'Quantidade': 48, 'Custo unitário': 12.5 }
+], 'Base', 'modelo_base_inventario.xlsx');
+
+/* =====================================================================
+   QR DO APP / MODAL
+   ===================================================================== */
+function desenharQR() {
+  if (!window.qrcode) { $('#qr').innerHTML = '<div class="mut">Sem internet para gerar o QR.<br>No app, digite a URL e a chave.</div>'; return; }
+  const qr = qrcode(0, 'M'); qr.addData(JSON.stringify({ url: cfg.url, key: cfg.key })); qr.make();
+  $('#qr').innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: false });
+}
+function abrirModal(html) { $('#modal-box').innerHTML = html; $('#modal').classList.add('on'); $$('#modal [data-fechar]').forEach(b => b.onclick = fecharModal); setTimeout(() => $('#modal input')?.focus(), 50); }
+function fecharModal() { $('#modal').classList.remove('on'); }
+$('#modal').onclick = e => { if (e.target.id === 'modal') fecharModal(); };
+
+/* ---------- início ---------- */
+if (cfg && auth) iniciar().catch(e => { toast(e.message, 'err'); sairPainel(); });
+else $('#v-login').style.display = '';
+</script>
+</body>
+</html>
